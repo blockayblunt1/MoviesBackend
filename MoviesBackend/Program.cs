@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MovieBackend.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -47,27 +48,43 @@ builder.Services.AddCors(options =>
 // Try to get connection string from environment variable or configuration
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
+// Check if connection string is empty or whitespace
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    connectionString = null; // Set to null to trigger DATABASE_URL check
+}
+
 // If not found, try to parse DATABASE_URL (common on Render when database is linked)
-if (string.IsNullOrEmpty(connectionString))
+if (string.IsNullOrWhiteSpace(connectionString))
 {
     var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
-    if (!string.IsNullOrEmpty(databaseUrl))
+    if (!string.IsNullOrWhiteSpace(databaseUrl))
     {
-        // Parse postgresql://user:password@host:port/database format
-        var uri = new Uri(databaseUrl);
-        var userInfo = uri.UserInfo.Split(':');
-        var port = uri.Port == -1 ? 5432 : uri.Port; // Default to 5432 if port not specified
-        var username = Uri.UnescapeDataString(userInfo[0]);
-        var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "";
-        var database = uri.LocalPath.TrimStart('/');
-        
-        connectionString = $"Host={uri.Host};Port={port};Database={database};Username={username};Password={password}";
+        try
+        {
+            // Parse postgresql://user:password@host:port/database format
+            var uri = new Uri(databaseUrl);
+            var userInfo = uri.UserInfo.Split(':');
+            var port = uri.Port == -1 ? 5432 : uri.Port; // Default to 5432 if port not specified
+            var username = Uri.UnescapeDataString(userInfo[0]);
+            var password = userInfo.Length > 1 ? Uri.UnescapeDataString(userInfo[1]) : "";
+            var database = uri.LocalPath.TrimStart('/');
+            
+            connectionString = $"Host={uri.Host};Port={port};Database={database};Username={username};Password={password}";
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to parse DATABASE_URL: {ex.Message}");
+        }
     }
 }
 
-if (string.IsNullOrEmpty(connectionString))
+if (string.IsNullOrWhiteSpace(connectionString))
 {
-    throw new InvalidOperationException("Connection string 'DefaultConnection' not found. Please set ConnectionStrings__DefaultConnection or DATABASE_URL environment variable.");
+    throw new InvalidOperationException(
+        "Connection string 'DefaultConnection' not found. " +
+        "Please set ConnectionStrings__DefaultConnection environment variable or DATABASE_URL environment variable. " +
+        "On Render, link a PostgreSQL database to automatically set DATABASE_URL.");
 }
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -76,10 +93,19 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 var app = builder.Build();
 
 // Apply any pending EF Core migrations automatically on startup
-using (var scope = app.Services.CreateScope())
+try
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Database.Migrate();
+    }
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "An error occurred while migrating the database.");
+    throw; // Re-throw to fail fast if database connection fails
 }
 
 
