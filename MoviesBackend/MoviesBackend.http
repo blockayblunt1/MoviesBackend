@@ -1,0 +1,48 @@
+@MovieBackend_HostAddress = http://localhost:5254
+
+### Get all movies
+GET {{MovieBackend_HostAddress}}/api/movies
+Accept: application/json
+
+### Get all movies with search
+GET {{MovieBackend_HostAddress}}/api/movies?search=inception
+Accept: application/json
+
+### Get all movies filtered by genre
+GET {{MovieBackend_HostAddress}}/api/movies?genre=Action
+Accept: application/json
+
+### Get all movies sorted by rating
+GET {{MovieBackend_HostAddress}}/api/movies?sortBy=rating&sortOrder=desc
+Accept: application/json
+
+### Get movie by ID
+GET {{MovieBackend_HostAddress}}/api/movies/1
+Accept: application/json
+
+### Create a new movie
+POST {{MovieBackend_HostAddress}}/api/movies
+Content-Type: application/json
+
+{
+  "title": "Inception",
+  "genre": "Sci-Fi",
+  "rating": 5,
+  "posterImage": "https://example.com/poster.jpg"
+}
+
+### Update a movie
+PUT {{MovieBackend_HostAddress}}/api/movies/1
+Content-Type: application/json
+
+{
+  "title": "Inception",
+  "genre": "Science Fiction",
+  "rating": 5,
+  "posterImage": "https://example.com/poster.jpg"
+}
+
+### Delete a movie
+DELETE {{MovieBackend_HostAddress}}/api/movies/1
+
+###
